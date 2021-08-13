@@ -1,0 +1,1 @@
+#Read bsoup.py that has the web scrapping havnt finished it but this is what i did with the time i had in class would have had more but the zillow api would not work
