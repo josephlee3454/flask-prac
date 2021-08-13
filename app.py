@@ -1,58 +1,90 @@
-#!/usr/bin/python3
-
-from flask import Flask
-from flask import redirect
-from flask import request
-from flask import render_template
-from flask import make_response
-
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_marshmallow import Marshmallow
+import os
 
 app = Flask(__name__)
+basedir = os.path.abspath(os.path.dirname(__file__))
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'crud.sqlite')
+db = SQLAlchemy(app)
+ma = Marshmallow(app)
 
-html= """<style>
-body {
-  background-color: black;
-  text-align: center;
-  color: white;
-  font-family: Arial, Helvetica, sans-serif;
-}
-</style>
-</head>
-<body>
 
-<h1>TRIVIA TIME</h1>
-<p>What is the meaning of life, the universe, and everything?</p>
-<img src="https://stevetobak.com/wp-content/uploads/2021/02/dont-panic.png" alt="Avatar" style="width:200px">
+class House(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    address = db.Column(db.String(80), unique=True)
+    price = db.Column(db.String(80), unique=True)
+    beds = db.Column(db.String(80), unique=True)
 
-    <form action = "/login" method = "POST">
-        <p><input type = "text" name = "nm"></p>
-        <p><input type = "submit" value = "submit"></p>
-    </form>
+    def __init__(self, address, price):
+        self.address = address
+        self.price = price
+        
 
-</body>
-</html>"""
 
-@app.route("/correct")
-def success():
-    return f"That is correct!"
+class UserSchema(ma.Schema):
+    class Meta:
+        # Fields to expose
+        fields = ('username', 'email')
 
-@app.route("/")
-def start():
-    return html
 
-@app.route("/login", methods = ["POST"])
-def login():
-    #store user answer to the hitchhikers question in a cookie 
-        if request.form.get("nm"):
-            answer = request.form.get("nm") 
-            if answer == "42":
-                resp= make_response(redirect("/correct"))
-                resp.set_cookie("mrPoopyButthole", answer)
-                return resp
-            else:
-                return redirect("/")
-        else:
-            return redirect("/")
+user_schema = UserSchema()
+users_schema = UserSchema(many=True)
 
-if __name__ == "__main__":
-   app.run(host="0.0.0.0", port=2224) # runs the application
+
+# endpoint to create new user
+@app.route("/user", methods=["POST"])
+def add_user():
+    username = request.json['username']
+    email = request.json['email']
+
+    new_user = User(username, email)
+
+    db.session.add(new_user)
+    db.session.commit()
+
+    user = User.query.get(new_user.id)
+
+    return user_schema.jsonify(user)
+
+# endpoint to show all users
+@app.route("/user", methods=["GET"])
+def get_user():
+    all_users = User.query.all()
+    result = users_schema.dump(all_users)
+    return jsonify(result.data)
+
+
+# endpoint to get user detail by id
+@app.route("/user/<id>", methods=["GET"])
+def user_detail(id):
+    user = User.query.get(id)
+    return user_schema.jsonify(user)
+
+
+# endpoint to update user
+@app.route("/user/<id>", methods=["PUT"])
+def user_update(id):
+    user = User.query.get(id)
+    username = request.json['username']
+    email = request.json['email']
+
+    user.email = email
+    user.username = username
+
+    db.session.commit()
+    return user_schema.jsonify(user)
+
+
+# endpoint to delete user
+@app.route("/user/<id>", methods=["DELETE"])
+def user_delete(id):
+    user = User.query.get(id)
+    db.session.delete(user)
+    db.session.commit()
+
+    return user_schema.jsonify(user)
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
